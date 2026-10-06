@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>協調フィルタリング簡易シミュレーション</title>
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Pyodide 314.0.7 -->
+  <script src="https://cdn.jsdelivr.net/pyodide/v314.0.7/full/pyodide.js"></script>
+</head>
+
+<body>
+  <main class="page-shell">
+
+    <header class="hero">
+      <p class="eyebrow">Collaborative Filtering Demo</p>
+      <h1>協調フィルタリング<br>簡易シミュレーション</h1>
+      <p class="lead">
+        Aさんの映画評価を変えて、似ているユーザーと推薦結果が
+        どう変化するかを試してみましょう。
+      </p>
+    </header>
+
+    <section class="card">
+      <div class="section-heading">
+        <span class="step">1</span>
+        <div>
+          <h2>Aさんの評価を変更</h2>
+          <p>3作品の評価を1〜5から選び、「再計算」を押してください。</p>
+        </div>
+      </div>
+
+      <div class="controls">
+        <label>
+          <span>タイタニック</span>
+          <select id="rating-titanic">
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5" selected>5</option>
+          </select>
+        </label>
+
+        <label>
+          <span>シックスセンス</span>
+          <select id="rating-sixth">
+            <option value="1">1</option>
+            <option value="2" selected>2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+          </select>
+        </label>
+
+        <label>
+          <span>ジュラシックパーク</span>
+          <select id="rating-jurassic">
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3" selected>3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+          </select>
+        </label>
+
+        <button id="recalculate" type="button" disabled>
+          Pythonを準備中...
+        </button>
+      </div>
+
+      <p id="status" class="status">Pyodideとライブラリを読み込んでいます。</p>
+    </section>
+
+    <section class="card">
+      <div class="section-heading">
+        <span class="step">2</span>
+        <div>
+          <h2>映画の評価</h2>
+          <p>Aさんは「スター・ウォーズ」が未視聴です。</p>
+        </div>
+      </div>
+
+      <div id="rating-table" class="table-wrap loading-box">
+        読み込み中...
+      </div>
+
+      <p class="note">
+        ※ 未視聴はPython内部では <code>NaN</code> として扱います。
+      </p>
+    </section>
+
+    <section class="card">
+      <div class="section-heading">
+        <span class="step">3</span>
+        <div>
+          <h2>ユーザー間のコサイン類似度</h2>
+          <p>
+            両者が共通して評価した映画だけで計算します。
+            1.000に近いほど評価傾向が似ています。
+          </p>
+        </div>
+      </div>
+
+      <div class="legend">
+        <span><i class="legend-box sim-very-high"></i>0.95以上</span>
+        <span><i class="legend-box sim-high"></i>0.85以上</span>
+        <span><i class="legend-box sim-mid"></i>0.70以上</span>
+        <span><i class="legend-box sim-low"></i>0.70未満</span>
+      </div>
+
+      <div id="similarity-table" class="table-wrap loading-box">
+        読み込み中...
+      </div>
+
+      <p class="note">
+        ※ 対角線は自分自身との比較なので1.000です。
+        下三角部分は同じ組み合わせの重複になるため「−」にしています。
+      </p>
+    </section>
+
+    <section class="recommend-card">
+      <div class="recommend-label">推薦の例</div>
+
+      <div class="recommend-grid">
+        <div class="recommend-main">
+          <p class="small">Aさんに最も似ている人</p>
+          <p id="most-similar" class="person">—</p>
+          <p class="score">
+            類似度 <strong id="similarity-score">—</strong>
+          </p>
+        </div>
+
+        <div class="arrow" aria-hidden="true">→</div>
+
+        <div class="recommend-main">
+          <p id="movie-score-label" class="small">
+            その人の「スター・ウォーズ」評価
+          </p>
+          <p id="movie-score" class="person">—</p>
+          <p id="stars" class="stars">☆☆☆☆☆</p>
+        </div>
+      </div>
+
+      <div class="conclusion">
+        <strong id="recommendation-text">計算結果を待っています。</strong>
+        <span>
+          共通して見た映画の評価傾向が似ている人の評価を参考にしています。
+        </span>
+      </div>
+    </section>
+
+    <section class="explain-card">
+      <h2>このシミュレーションでしていること</h2>
+      <div class="flow">
+        <div><b>①</b><span>共通して見た映画の評価を比べる</span></div>
+        <div><b>②</b><span>コサイン類似度で「似ている人」を探す</span></div>
+        <div><b>③</b><span>その人が高く評価した未視聴作品を推薦候補にする</span></div>
+      </div>
+      <p class="caution">
+        ※ 実際の推薦システムは、より多くのユーザー・作品・補正方法などを使います。
+        これは仕組みを理解するための簡易例です。
+      </p>
+    </section>
+
+  </main>
+
+  <script>
+    async function startPyodideApp() {
+      const status = document.getElementById("status");
+      const button = document.getElementById("recalculate");
+
+      try {
+        status.textContent = "Pyodideを読み込んでいます...";
+        const pyodide = await loadPyodide();
+
+        status.textContent = "NumPyとpandasを読み込んでいます...";
+        await pyodide.loadPackage(["numpy", "pandas"]);
+
+        status.textContent = "Pythonプログラムを読み込んでいます...";
+        const response = await fetch("cos_sim02.py");
+
+        if (!response.ok) {
+          throw new Error(
+            `cos_sim02.py の読み込みに失敗しました: ${response.status}`
+          );
+        }
+
+        const pythonCode = await response.text();
+
+        status.textContent = "Pythonプログラムを実行しています...";
+        await pyodide.runPythonAsync(pythonCode);
+
+        status.textContent = "準備完了。評価を変更して再計算できます。";
+        status.classList.add("ready");
+        button.disabled = false;
+        button.textContent = "再計算";
+      } catch (error) {
+        console.error(error);
+        status.textContent = "読み込みに失敗しました。開発者ツールのConsoleを確認してください。";
+        status.classList.add("error");
+        button.textContent = "エラー";
+      }
+    }
+
+    startPyodideApp();
+  </script>
+</body>
+</html>
